@@ -1,0 +1,79 @@
+name: iOS build
+
+on:
+  push:
+    branches: ["claude/**", "main"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Pick simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 scripts/pick_sim.py)
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "Simulator: $UDID"
+
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          mkdir -p out
+          xcodebuild test -project ReturnMate.xcodeproj -scheme ReturnMate \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath build/sim CODE_SIGNING_ALLOWED=NO \
+            | tee out/test.log | grep -E "error:|warning: unre|Test Case|Executed|TEST (SUCCEEDED|FAILED)|\*\* " || true
+          grep -q "TEST SUCCEEDED" out/test.log
+
+      - name: Screenshots
+        if: always()
+        run: bash scripts/screenshots.sh "${{ steps.sim.outputs.udid }}" || true
+
+      - name: Build unsigned IPA
+        run: |
+          set -o pipefail
+          xcodebuild build -project ReturnMate.xcodeproj -scheme ReturnMate \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build/device \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            | tee out/build.log | grep -E "error:|\*\* BUILD" || true
+          APP=build/device/Build/Products/Release-iphoneos/ReturnMate.app
+          test -d "$APP"
+          rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
+          zip -qry out/ReturnMate.ipa Payload
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: returnmate
+          path: out
+
+      - name: Publish to builds branch
+        if: always()
+        run: |
+          cd out
+          git init -q
+          git config user.name "ci"
+          git config user.email "ci@users.noreply.github.com"
+          echo "${{ github.sha }}" > SOURCE_SHA
+          git add -A
+          git commit -qm "Build ${{ github.sha }}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:refs/heads/builds

@@ -1,0 +1,58 @@
+name: ReturnMate
+options:
+  bundleIdPrefix: com.returnmate
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+targets:
+  ReturnMate:
+    type: application
+    platform: iOS
+    sources:
+      - path: ReturnMate
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.returnmate.app
+        PRODUCT_NAME: ReturnMate
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: ReturnMate
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_NSCameraUsageDescription: "ReturnMate usa la fotocamera per fotografare ricevute e prodotti."
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "ReturnMate legge screenshot e foto per estrarre i dati degli acquisti."
+        INFOPLIST_KEY_NSFaceIDUsageDescription: "ReturnMate usa Face ID per proteggere i tuoi acquisti."
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.finance
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGNING_ALLOWED: NO
+  ReturnMateTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: ReturnMateTests
+    dependencies:
+      - target: ReturnMate
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.returnmate.tests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/ReturnMate.app/ReturnMate"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+schemes:
+  ReturnMate:
+    build:
+      targets:
+        ReturnMate: all
+        ReturnMateTests: [test]
+    test:
+      targets:
+        - ReturnMateTests
