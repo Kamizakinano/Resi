@@ -126,8 +126,12 @@ final class DataStore {
 
     func mutate(_ id: UUID, _ change: (inout Purchase) throws -> Void) rethrows {
         guard let i = data.purchases.firstIndex(where: { $0.id == id }) else { return }
-        try change(&data.purchases[i])
-        data.purchases[i].updatedAt = Date()
+        // Si lavora su una copia: le closure possono leggere lo store (es. calendario e impostazioni)
+        // senza violare l'accesso esclusivo a `data`.
+        var p = data.purchases[i]
+        try change(&p)
+        p.updatedAt = Date()
+        data.purchases[i] = p
         commit()
     }
 
