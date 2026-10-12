@@ -33,6 +33,8 @@ jobs:
           echo "Simulator: $UDID"
 
       - name: Unit tests
+        id: tests
+        continue-on-error: true
         run: |
           set -o pipefail
           mkdir -p out
@@ -40,13 +42,17 @@ jobs:
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -derivedDataPath build/sim CODE_SIGNING_ALLOWED=NO \
             | tee out/test.log | grep -E "error:|warning: unre|Test Case|Executed|TEST (SUCCEEDED|FAILED)|\*\* " || true
+          grep -E "error:|failed|XCTAssert" out/test.log | head -200 > out/test-errors.txt || true
           grep -q "TEST SUCCEEDED" out/test.log
 
       - name: Screenshots
-        if: always()
+        if: steps.tests.outcome == 'success'
+        timeout-minutes: 10
         run: bash scripts/screenshots.sh "${{ steps.sim.outputs.udid }}" || true
 
       - name: Build unsigned IPA
+        id: ipa
+        continue-on-error: true
         run: |
           set -o pipefail
           xcodebuild build -project ReturnMate.xcodeproj -scheme ReturnMate \
@@ -54,6 +60,7 @@ jobs:
             -derivedDataPath build/device \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             | tee out/build.log | grep -E "error:|\*\* BUILD" || true
+          grep -E "error:" out/build.log | head -200 > out/build-errors.txt || true
           APP=build/device/Build/Products/Release-iphoneos/ReturnMate.app
           test -d "$APP"
           rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
@@ -77,3 +84,7 @@ jobs:
           git add -A
           git commit -qm "Build ${{ github.sha }}"
           git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:refs/heads/builds
+
+      - name: Fail if tests or build failed
+        if: steps.tests.outcome != 'success' || steps.ipa.outcome != 'success'
+        run: exit 1
