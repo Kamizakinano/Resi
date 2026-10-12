@@ -209,6 +209,46 @@ struct NotificationSettingsView: View {
 
     private let presets = [14, 7, 3, 2, 1, 0]
 
+    private var offsets: [Int] {
+        Array(Set(presets + store.settings.reminderOffsets)).sorted(by: >)
+    }
+
+    private func label(for d: Int) -> String {
+        switch d {
+        case 0: return "Il giorno della scadenza"
+        case 1: return "1 giorno prima"
+        default: return "\(d) giorni prima"
+        }
+    }
+
+    private func setOffset(_ d: Int, on: Bool) {
+        store.updateSettings { s in
+            var set = Set(s.reminderOffsets)
+            if on { set.insert(d) } else { set.remove(d) }
+            s.reminderOffsets = set.sorted(by: >)
+        }
+    }
+
+    private func binding(for d: Int) -> Binding<Bool> {
+        Binding(get: { store.settings.reminderOffsets.contains(d) }, set: { setOffset(d, on: $0) })
+    }
+
+    private var timeBinding: Binding<Date> {
+        Binding(
+            get: {
+                let s = store.settings
+                return Calendar.current.date(bySettingHour: s.reminderHour, minute: s.reminderMinute, second: 0, of: Date()) ?? Date()
+            },
+            set: { d in
+                let c = Calendar.current.dateComponents([.hour, .minute], from: d)
+                store.updateSettings { s in
+                    s.reminderHour = c.hour ?? 9
+                    s.reminderMinute = c.minute ?? 0
+                }
+            }
+        )
+    }
+
     var body: some View {
         let settings = store.settings
         Form {
@@ -216,34 +256,16 @@ struct NotificationSettingsView: View {
                 Section { NotificationBanner() }
             }
             Section {
-                ForEach(Array(Set(presets + settings.reminderOffsets)).sorted(by: >), id: \.self) { d in
-                    Toggle(d == 0 ? "Il giorno della scadenza" : (d == 1 ? "1 giorno prima" : "\(d) giorni prima"), isOn: Binding(
-                        get: { settings.reminderOffsets.contains(d) },
-                        set: { on in
-                            store.updateSettings { s in
-                                if on { s.reminderOffsets = Array(Set(s.reminderOffsets + [d])).sorted(by: >) }
-                                else { s.reminderOffsets.removeAll { $0 == d } }
-                            }
-                        }
-                    ))
+                ForEach(offsets, id: \.self) { d in
+                    Toggle(label(for: d), isOn: binding(for: d))
                 }
                 Stepper("Altro intervallo: \(customDays) giorni", value: $customDays, in: 1...60)
-                Button("Aggiungi \(customDays) giorni prima") {
-                    store.updateSettings { s in s.reminderOffsets = Array(Set(s.reminderOffsets + [customDays])).sorted(by: >) }
-                }
+                Button("Aggiungi \(customDays) giorni prima") { setOffset(customDays, on: true) }
             } header: {
                 Text("Quando avvisarmi")
             }
             Section("Orario") {
-                DatePicker("Ora dei promemoria", selection: Binding(
-                    get: {
-                        Calendar.current.date(bySettingHour: settings.reminderHour, minute: settings.reminderMinute, second: 0, of: Date()) ?? Date()
-                    },
-                    set: { d in
-                        let c = Calendar.current.dateComponents([.hour, .minute], from: d)
-                        store.updateSettings { $0.reminderHour = c.hour ?? 9; $0.reminderMinute = c.minute ?? 0 }
-                    }
-                ), displayedComponents: .hourAndMinute)
+                DatePicker("Ora dei promemoria", selection: timeBinding, displayedComponents: .hourAndMinute)
             }
             Section {
                 Toggle("Avvisi per scadenze da verificare", isOn: Binding(get: { settings.verifyReminders }, set: { v in store.updateSettings { $0.verifyReminders = v } }))
