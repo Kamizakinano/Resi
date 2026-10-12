@@ -4,3 +4,4 @@ DerivedData/
 *.ipa
 .DS_Store
 xcuserdata/
+out/
